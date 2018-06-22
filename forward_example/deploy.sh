@@ -10,7 +10,7 @@ echo "Removing running functions"
 faas-cli rm -f stack.yml
 
 echo "Deleting old templates"
-[ ! "$(ls | grep template)" ] && rm -rf template
+rm -rf template
 
 echo "Pulling latest faas-forward templates"
 faas-cli template pull https://github.com/s8sg/faas-forward

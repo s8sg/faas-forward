@@ -27,6 +27,7 @@ const (
 var (
 	//regex       = regexp.MustCompile("[^,\\s][^\\,]*[^,\\s]*")
 	async                = false
+	chain                = true
 	forwardAddr          string
 	reqStore             = make(map[string][]byte)
 	requestQueue         = make(chan string, 10)
@@ -46,13 +47,14 @@ func reqHandle(w http.ResponseWriter, r *http.Request) {
 
 	var body []byte
 	var requestID string
+	var err error
 
-	// Try to read request as forwarded request
-	r.ParseMultipartForm(32 << 20)
-	req, header, err := r.FormFile("data")
-	switch err {
 	// in case no failure get requestID and data
-	case nil:
+	switch chain {
+	case false:
+		// Try to read request as forwarded request
+		r.ParseMultipartForm(32 << 20)
+		req, header, err := r.FormFile("data")
 		defer req.Close()
 		requestID := header.Filename
 		reqsize := header.Size
@@ -63,7 +65,7 @@ func reqHandle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	// in case of error treat it as direct request
-	default:
+	case true:
 		// Generate the request id
 		requestID := genRequestId()
 		log.Printf("received fresh request, generated request ID: %s", requestID)
@@ -228,6 +230,11 @@ func initialize() {
 	if strings.ToUpper(os.Getenv("async")) == "TRUE" {
 		log.Printf("Async flag is set, function won't wait for forward chain")
 		async = true
+	}
+
+	if strings.ToUpper(os.Getenv("chain")) == "TRUE" {
+		log.Printf("Function defined as chain")
+		chain = true
 	}
 
 	readTimeout = parseIntOrDurationValue(os.Getenv("read_timeout"), time.Second*5)

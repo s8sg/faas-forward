@@ -9,6 +9,7 @@ functions:
     handler: ./example
     image: s8sg/example:latest
     environment:
+        chain: true
         async : false
         forward: service2
 
