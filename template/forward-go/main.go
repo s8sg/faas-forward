@@ -80,7 +80,7 @@ func reqHandle(w http.ResponseWriter, r *http.Request) {
 	respbytes, err := function.Handle(body)
 	if err != nil {
 		// in case of failure just fallback
-		http.Error(w, fmt.Sprintf("%v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Failed to handle request: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -227,6 +227,7 @@ func initialize() {
 	if forwardAddr == "" {
 		log.Printf("No forward address provided, considering function as end of chain")
 	}
+	forwardAddr = "http://" + forwardAddr + ":8080"
 	if strings.ToUpper(os.Getenv("async")) == "TRUE" {
 		log.Printf("Async flag is set, function won't wait for forward chain")
 		async = true
