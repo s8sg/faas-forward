@@ -1,0 +1,34 @@
+provider:
+  name: faas
+  gateway: http://127.0.0.1:8080
+
+functions:
+  # Gateway to handle the UI and API request
+  service1:
+    lang: forward-go
+    handler: ./example
+    image: s8sg/example:latest
+    environment:
+        async : false
+        forward: service2
+
+  service2:
+    lang: forward-go
+    handler: ./example
+    image: s8sg/example:latest
+    environment:
+        async : false
+        forward: service3
+
+  service3:
+    lang: forward-go
+    handler: ./example
+    image: s8sg/example:latest
+    environment:
+        async : true
+        forward: service4
+
+  service4:
+    lang: forward-go
+    handler: ./example
+    image: s8sg/example:latest
