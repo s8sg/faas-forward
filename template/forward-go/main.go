@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/rs/xid"
 	"handler/function"
@@ -11,7 +12,11 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"os/signal"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -20,11 +25,14 @@ const (
 )
 
 var (
-	async       = false
-	forwardAddr string
 	//regex       = regexp.MustCompile("[^,\\s][^\\,]*[^,\\s]*")
-	reqStore     = make(map[string][]byte)
-	requestQueue = make(chan string, 10)
+	async                = false
+	forwardAddr          string
+	reqStore             = make(map[string][]byte)
+	requestQueue         = make(chan string, 10)
+	readTimeout          time.Duration
+	writeTimeout         time.Duration
+	acceptingConnections bool
 )
 
 // generate a request id based on request
@@ -42,10 +50,10 @@ func reqHandle(w http.ResponseWriter, r *http.Request) {
 	// Try to read request as forwarded request
 	r.ParseMultipartForm(32 << 20)
 	req, header, err := r.FormFile("data")
-	defer req.Close()
 	switch err {
 	// in case no failure get requestID and data
 	case nil:
+		defer req.Close()
 		requestID := header.Filename
 		reqsize := header.Size
 		log.Printf("received request with request-ID '%s' with size '%d'", requestID, reqsize)
@@ -64,7 +72,6 @@ func reqHandle(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, fmt.Sprintf("failed to read forwarded request '%s', error: %v", requestID, err), http.StatusInternalServerError)
 			return
 		}
-
 	}
 
 	// handle the request using user defined handler
@@ -164,6 +171,54 @@ func forwarder() {
 	}
 }
 
+func lockFilePresent() bool {
+	path := filepath.Join(os.TempDir(), ".lock")
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
+
+func createLockFile() (string, error) {
+	path := filepath.Join(os.TempDir(), ".lock")
+	log.Printf("Writing lock-file to: %s\n", path)
+	writeErr := ioutil.WriteFile(path, []byte{}, 0660)
+	acceptingConnections = true
+
+	return path, writeErr
+}
+
+// handle health request
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		if acceptingConnections == false || lockFilePresent() == false {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+		break
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func parseIntOrDurationValue(val string, fallback time.Duration) time.Duration {
+	if len(val) > 0 {
+		parsedVal, parseErr := strconv.Atoi(val)
+		if parseErr == nil && parsedVal >= 0 {
+			return time.Duration(parsedVal) * time.Second
+		}
+	}
+	duration, durationErr := time.ParseDuration(val)
+	if durationErr != nil {
+		return fallback
+	}
+	return duration
+}
+
 // initialize
 func initialize() {
 	forwardAddr = os.Getenv("forward")
@@ -174,6 +229,9 @@ func initialize() {
 		log.Printf("Async flag is set, function won't wait for forward chain")
 		async = true
 	}
+
+	readTimeout = parseIntOrDurationValue(os.Getenv("read_timeout"), time.Second*5)
+	writeTimeout = parseIntOrDurationValue(os.Getenv("write_timeout"), time.Second*5)
 }
 
 func main() {
@@ -185,8 +243,51 @@ func main() {
 		go forwarder()
 	}
 
+	s := &http.Server{
+		Addr:         ":8080",
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
+	}
+
 	// handle request with request handle
 	http.HandleFunc("/", reqHandle)
+	http.HandleFunc("/_/health", healthHandler)
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	path, writeErr := createLockFile()
+	if writeErr != nil {
+		log.Panicf("Cannot write %s\n Error: %s.\n", path, writeErr.Error())
+	}
+
+	listenUntilShutdown(writeTimeout, s)
+}
+
+func listenUntilShutdown(shutdownTimeout time.Duration, s *http.Server) {
+
+	idleConnsClosed := make(chan struct{})
+	go func() {
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, syscall.SIGTERM)
+
+		<-sig
+
+		log.Printf("SIGTERM received.. shutting down server")
+
+		acceptingConnections = false
+
+		if err := s.Shutdown(context.Background()); err != nil {
+			// Error from closing listeners, or context timeout:
+			log.Printf("Error in Shutdown: %v", err)
+		}
+
+		<-time.Tick(shutdownTimeout)
+
+		close(idleConnsClosed)
+	}()
+
+	if err := s.ListenAndServe(); err != http.ErrServerClosed {
+		log.Printf("Error ListenAndServe: %v", err)
+		close(idleConnsClosed)
+	}
+
+	<-idleConnsClosed
 }
