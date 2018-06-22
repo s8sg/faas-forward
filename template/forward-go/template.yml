@@ -1,2 +1,2 @@
-language: go
+language: forward-go
 fprocess: ./handler
