@@ -55,12 +55,18 @@ func reqHandle(w http.ResponseWriter, r *http.Request) {
 		// Try to read request as forwarded request
 		r.ParseMultipartForm(32 << 20)
 		req, header, err := r.FormFile("data")
+		if err != nil {
+			log.Printf("failed to parse forwarded data, error: %v", err)
+			http.Error(w, fmt.Sprintf("failed to parse forwarded data, error: %v", err), http.StatusInternalServerError)
+			return
+		}
 		defer req.Close()
 		requestID := header.Filename
 		reqsize := header.Size
 		log.Printf("received request with request-ID '%s' with size '%d'", requestID, reqsize)
 		body, err = ioutil.ReadAll(req)
 		if err != nil {
+			log.Printf("failed to read forwarded request with ID '%s', error: %v", requestID, err)
 			http.Error(w, fmt.Sprintf("failed to read forwarded request with ID '%s', error: %v", requestID, err), http.StatusInternalServerError)
 			return
 		}
@@ -71,6 +77,7 @@ func reqHandle(w http.ResponseWriter, r *http.Request) {
 		log.Printf("received fresh request, generated request ID: %s", requestID)
 		body, err = ioutil.ReadAll(r.Body)
 		if err != nil {
+			log.Printf("failed to read forwarded request '%s', error: %v", requestID, err)
 			http.Error(w, fmt.Sprintf("failed to read forwarded request '%s', error: %v", requestID, err), http.StatusInternalServerError)
 			return
 		}
@@ -80,6 +87,7 @@ func reqHandle(w http.ResponseWriter, r *http.Request) {
 	respbytes, err := function.Handle(body)
 	if err != nil {
 		// in case of failure just fallback
+		log.Printf("Failed to handle request: %v", err)
 		http.Error(w, fmt.Sprintf("Failed to handle request: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -91,7 +99,8 @@ func reqHandle(w http.ResponseWriter, r *http.Request) {
 		// put on the request queue to be performed in async
 		requestQueue <- requestID
 	case false:
-		err = forwardToFunction(requestID)
+		client := &http.Client{}
+		err = forward(client, forwardAddr, requestID, respbytes)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -123,6 +132,8 @@ func forward(client *http.Client, url string, requestID string, data []byte) (er
 	}
 
 	w.Close()
+
+	log.Printf("sending data: %s", string(data))
 
 	req, err := http.NewRequest("POST", url, &b)
 	if err != nil {
