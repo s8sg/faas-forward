@@ -27,7 +27,7 @@ const (
 var (
 	//regex       = regexp.MustCompile("[^,\\s][^\\,]*[^,\\s]*")
 	async                = false
-	chain                = true
+	chain                = false
 	forwardAddr          string
 	reqStore             = make(map[string][]byte)
 	requestQueue         = make(chan string, 10)
