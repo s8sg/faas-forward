@@ -27,7 +27,8 @@ const (
 var (
 	//regex       = regexp.MustCompile("[^,\\s][^\\,]*[^,\\s]*")
 	inputType            = "FILE"
-	fileFormName         = "data"
+	fileFormName         = "file"
+	forwardEnable        = true
 	async                = false
 	forwardAddr          string
 	reqStore             = make(map[string][]byte)
@@ -55,15 +56,20 @@ func reqHandle(w http.ResponseWriter, r *http.Request) {
 	// Input type
 	case "FILE":
 		// Try to read request as forwarded request
-		r.ParseMultipartForm(32 << 20)
-		req, header, err := r.FormFile("data")
+		err = r.ParseMultipartForm(32 << 20)
+		if err != nil {
+			log.Printf("failed to parse forwarded data, error: %v", err)
+			http.Error(w, fmt.Sprintf("failed to parse forwarded data, error: %v", err), http.StatusInternalServerError)
+			return
+		}
+		req, header, err := r.FormFile(fileFormName)
 		if err != nil {
 			log.Printf("failed to parse forwarded data, error: %v", err)
 			http.Error(w, fmt.Sprintf("failed to parse forwarded data, error: %v", err), http.StatusInternalServerError)
 			return
 		}
 		defer req.Close()
-		requestID := header.Filename
+		requestID = header.Filename
 		reqsize := header.Size
 		log.Printf("received request with request-ID '%s' with size '%d'", requestID, reqsize)
 		body, err = ioutil.ReadAll(req)
@@ -74,7 +80,7 @@ func reqHandle(w http.ResponseWriter, r *http.Request) {
 		}
 	case "POST":
 		// Generate the request id
-		requestID := genRequestId()
+		requestID = genRequestId()
 		log.Printf("received fresh request, generated request ID: %s", requestID)
 		body, err = ioutil.ReadAll(r.Body)
 		if err != nil {
@@ -93,6 +99,11 @@ func reqHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !forwardEnable {
+		w.Write(respbytes)
+		return
+	}
+
 	// Check for request to perform in Sync
 	switch async {
 	case true:
@@ -101,11 +112,13 @@ func reqHandle(w http.ResponseWriter, r *http.Request) {
 		requestQueue <- requestID
 	case false:
 		client := &http.Client{}
-		err = forward(client, forwardAddr, requestID, respbytes)
+		data, err := forward(client, forwardAddr, requestID, respbytes)
 		if err != nil {
+			log.Printf("failed to request %s, error : %v", forwardAddr, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		w.Write(data)
 		// TODO: Post request handler (we might implement it later)
 		//       This way the last function on the chain would be executed at first
 		//       although user approah is more likely to be:
@@ -115,26 +128,22 @@ func reqHandle(w http.ResponseWriter, r *http.Request) {
 }
 
 // forward the request data
-func forward(client *http.Client, url string, requestID string, data []byte) (err error) {
+func forward(client *http.Client, url string, requestID string, data []byte) (result []byte, err error) {
 
 	// Prepare a form that you will submit to that URL.
 	var b bytes.Buffer
+
 	w := multipart.NewWriter(&b)
 
 	var fw io.Writer
 
-	if fw, err = w.CreateFormFile("data", requestID); err != nil {
+	if fw, err = w.CreateFormFile("file", requestID); err != nil {
 		return
 	}
 
-	r := bytes.NewReader(data)
-	if _, err = io.Copy(fw, r); err != nil {
-		return err
-	}
+	fw.Write(data)
 
 	w.Close()
-
-	log.Printf("sending data: %s", string(data))
 
 	req, err := http.NewRequest("POST", url, &b)
 	if err != nil {
@@ -147,18 +156,24 @@ func forward(client *http.Client, url string, requestID string, data []byte) (er
 	if err != nil {
 		return
 	}
+	defer res.Body.Close()
 
 	// Check the response
 	if res.StatusCode != http.StatusOK {
 		err = fmt.Errorf("bad status: %s", res.Status)
+		return
 	}
+
+	// Read the result
+	result, err = ioutil.ReadAll(res.Body)
+
 	return
 }
 
 // forward request to the function
 func forwardToFunction(requestID string) error {
 	client := &http.Client{}
-	err := forward(client, forwardAddr, requestID, reqStore[requestID])
+	_, err := forward(client, forwardAddr, requestID, reqStore[requestID])
 	if err != nil {
 		return err
 	}
@@ -238,6 +253,7 @@ func initialize() {
 	forwardAddr = os.Getenv("forward")
 	if forwardAddr == "" {
 		log.Printf("No forward address provided, considering function as end of chain")
+		forwardEnable = false
 	}
 	forwardAddr = "http://" + forwardAddr + ":8080"
 	if strings.ToUpper(os.Getenv("async")) == "TRUE" {

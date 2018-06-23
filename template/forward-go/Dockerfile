@@ -1,4 +1,4 @@
-FROM golang:1.9.4-alpine3.7 as builder
+FROM golang:1.9.4 as build
 
 WORKDIR /go/src/handler
 COPY . .
@@ -19,8 +19,8 @@ RUN mkdir -p /home/app
 
 WORKDIR /home/app
 
-COPY --from=builder /go/src/handler/function/  .
-COPY --from=builder /go/src/handler/handler    .
+COPY --from=build /go/src/handler/function/  .
+COPY --from=build /go/src/handler/handler    .
 
 RUN chown app /home/app
 
