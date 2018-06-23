@@ -9,7 +9,7 @@ functions:
     handler: ./example
     image: s8sg/example:latest
     environment:
-        chain: true
+        input_type: POST
         async : false
         forward: service2
 

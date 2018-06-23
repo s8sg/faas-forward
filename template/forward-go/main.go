@@ -26,8 +26,9 @@ const (
 
 var (
 	//regex       = regexp.MustCompile("[^,\\s][^\\,]*[^,\\s]*")
+	inputType            = "FILE"
+	fileFormName         = "data"
 	async                = false
-	chain                = false
 	forwardAddr          string
 	reqStore             = make(map[string][]byte)
 	requestQueue         = make(chan string, 10)
@@ -50,8 +51,9 @@ func reqHandle(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	// in case no failure get requestID and data
-	switch chain {
-	case false:
+	switch inputType {
+	// Input type
+	case "FILE":
 		// Try to read request as forwarded request
 		r.ParseMultipartForm(32 << 20)
 		req, header, err := r.FormFile("data")
@@ -70,8 +72,7 @@ func reqHandle(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, fmt.Sprintf("failed to read forwarded request with ID '%s', error: %v", requestID, err), http.StatusInternalServerError)
 			return
 		}
-	// in case of error treat it as direct request
-	case true:
+	case "POST":
 		// Generate the request id
 		requestID := genRequestId()
 		log.Printf("received fresh request, generated request ID: %s", requestID)
@@ -244,9 +245,12 @@ func initialize() {
 		async = true
 	}
 
-	if strings.ToUpper(os.Getenv("chain")) == "TRUE" {
-		log.Printf("Function defined as chain")
-		chain = true
+	if strings.ToUpper(os.Getenv("input_type")) == "POST" {
+		inputType = "POST"
+	} else {
+		if os.Getenv("file_form_name") != "" {
+			fileFormName = os.Getenv("file_form_name")
+		}
 	}
 
 	readTimeout = parseIntOrDurationValue(os.Getenv("read_timeout"), time.Second*5)
