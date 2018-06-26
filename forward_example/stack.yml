@@ -33,21 +33,11 @@ functions:
     image: s8sg/jsonpage:latest
     environment:
         async: false
-        forward: htmluploader
+        #forward: htmlhost
         content_type: "text/html"
-
-
-  # upload an html page to static html host
-  #htmluploader:
-  #  lang: forward-go
-  #  handler: ./htmluploader
-  #  image: s8sg/htmluploader:latest
-  #  environment:
-  #      async : false
-  #      content_type: "application/json"
 
   # html host
   #htmlhost:
   #  lang: dockerfile
   #  handler: ./htmlhost
-  #  image: s8sg/htmlhostr:latest
+  #  image: s8sg/htmlhost:latest

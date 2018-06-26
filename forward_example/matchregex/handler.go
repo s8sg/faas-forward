@@ -27,7 +27,7 @@ func Handle(req []byte) ([]byte, error) {
 	}
 
 	matches := r.FindAllString(string(req), -1)
-	var jsonMap map[string]int
+	jsonMap := make(map[string]int)
 	for _, key := range matches {
 		if _, ok := jsonMap[key]; !ok {
 			jsonMap[key] = 1
