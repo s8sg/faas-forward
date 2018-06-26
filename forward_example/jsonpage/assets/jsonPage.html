@@ -1,0 +1,34 @@
+{{ define "page" }}
+<!doctype html>
+<html lang='en'>
+ <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <meta name="description" content="URL Count">
+  <meta name="author" content="s8sg">
+
+  <title>URL Count</title>
+
+</head> 
+ <body>
+   <h1> URl Count </h1>
+   <div>
+	<table style="width:100%">
+		<tr>
+    			<th>URL</th>
+    			<th>Count</th>
+  		</tr>
+	{{ range $url, $count := .Urls }}	
+		<tr>
+			<td>{{ $url}}</td>
+			<td>{{ $count }} </td>
+		</tr>
+	{{ end }}
+	</table>
+   </div>
+ </body>
+</html>
+{{ end }}

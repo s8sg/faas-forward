@@ -3,33 +3,51 @@ provider:
   gateway: http://127.0.0.1:8080
 
 functions:
-  # Gateway to handle the UI and API request
-  service1:
+  # load a static html from the provided url
+  loadhtml:
     lang: forward-go
-    handler: ./example
-    image: s8sg/example:latest
+    handler: ./loadhtml
+    image: s8sg/loadhtml:latest
     environment:
-        input_type: POST
-        async : false
-        forward: service2
+        # Default input type for forward function is multipart file
+        input_type: "POST"
+        async: false
+        forward: matchregex
+        content_type: "text/html"
 
-  service2:
+  # match Regex on a given string and produce a output as json
+  matchregex:
     lang: forward-go
-    handler: ./example
-    image: s8sg/example:latest
+    handler: ./matchregex
+    image: s8sg/matchregex:latest
     environment:
-        async : false
-        forward: service3
-
-  service3:
+        regex: "(http|ftp|https)://([\\w_-]+(?:(?:\\.[\\w_-]+)+))([\\w.,@?^=%&:/~+#-]*[\\w@?^=%&/~+#-])?"
+        forward: jsonpage
+        async: false
+        content_type: "application/json"
+  
+  # Make a html page from json 
+  jsonpage:
     lang: forward-go
-    handler: ./example
-    image: s8sg/example:latest
+    handler: ./jsonpage
+    image: s8sg/jsonpage:latest
     environment:
-        async : true
-        forward: service4
+        async: false
+        forward: htmluploader
+        content_type: "text/html"
 
-  service4:
-    lang: forward-go
-    handler: ./example
-    image: s8sg/example:latest
+
+  # upload an html page to static html host
+  #htmluploader:
+  #  lang: forward-go
+  #  handler: ./htmluploader
+  #  image: s8sg/htmluploader:latest
+  #  environment:
+  #      async : false
+  #      content_type: "application/json"
+
+  # html host
+  #htmlhost:
+  #  lang: dockerfile
+  #  handler: ./htmlhost
+  #  image: s8sg/htmlhostr:latest
