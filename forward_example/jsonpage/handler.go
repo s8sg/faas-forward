@@ -1,7 +1,6 @@
 package function
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -40,10 +39,9 @@ func Handle(req []byte) ([]byte, error) {
 	htmlObj := HtmlObject{Urls: data}
 
 	var b bytes.Buffer
-	w := bufio.NewWriter(&b)
 
 	// parse template
-	err = gen.ExecuteTemplate(w, "page", htmlObj)
+	err = gen.ExecuteTemplate(&b, "page", htmlObj)
 	if err != nil {
 		log.Printf("failed to generate html, error %v", err)
 		return nil, fmt.Errorf("failed to generate html, error %v", err)
