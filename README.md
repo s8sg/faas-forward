@@ -43,7 +43,7 @@ _, err = chain.Invoke((io.Reader)image_file)
 > ```bash
 > // Handle a serverless request
 > func Handle(req []byte) ([]byte, error) {
->        return []byte(fmt.Sprintf("Hello, Go-Forward: %s", string(req))), nil
+>        return []byte(fmt.Sprintf("Hello, Go-Forward: %s. ", string(req))), nil
 > }
 > ```
    
@@ -86,3 +86,9 @@ _, err = chain.Invoke((io.Reader)image_file)
 >        input_type: "DATA"
 >        # No forward defines the end of a chain
 >```
+       
+**Execute**
+> ```bash
+> $ curl -X POST 127.0.0.1:8080/function/myfunc1 -d "Hello World"
+> Hello, Go-Forward: Hello World. Hello, Go-Forward: Hello World. Hello, Go-Forward: Hello World.
+> ```
