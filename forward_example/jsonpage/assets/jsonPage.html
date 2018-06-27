@@ -12,23 +12,23 @@
 
   <title>URL Count</title>
 
-</head> 
+ </head> 
  <body>
-   <h1> URl Count </h1>
-   <div>
-	<table style="width:100%">
-		<tr>
-    			<th>URL</th>
-    			<th>Count</th>
-  		</tr>
-	{{ range $url, $count := .Urls }}	
-		<tr>
-			<td>{{ $url}}</td>
-			<td>{{ $count }} </td>
-		</tr>
-	{{ end }}
-	</table>
-   </div>
+  <h1> URl Count </h1>
+  <div>
+   <table style="width:100%">
+      <tr>
+             <th>URL</th>
+             <th>Count</th>
+      </tr>
+      {{ range $url, $count := .Urls }} 
+      <tr>
+         <td>{{ $url}}</td>
+         <td>{{ $count }} </td>
+      </tr>
+      {{ end }}
+   </table>
+  </div>
  </body>
 </html>
 {{ end }}

@@ -30,6 +30,7 @@ var (
 	fileFormName         = "file"
 	forwardEnable        = true
 	async                = false
+	contentType          = "application/octet-stream"
 	forwardAddr          string
 	reqStore             = make(map[string][]byte)
 	requestQueue         = make(chan string, 10)
@@ -101,6 +102,7 @@ func reqHandle(w http.ResponseWriter, r *http.Request) {
 
 	if !forwardEnable {
 		w.Write(respbytes)
+		w.Header().Set("Content-Type", contentType)
 		return
 	}
 
@@ -112,13 +114,14 @@ func reqHandle(w http.ResponseWriter, r *http.Request) {
 		requestQueue <- requestID
 	case false:
 		client := &http.Client{}
-		data, err := forward(client, forwardAddr, requestID, respbytes)
+		data, respType, err := forward(client, forwardAddr, requestID, respbytes)
 		if err != nil {
 			log.Printf("failed to request %s, error : %v", forwardAddr, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.Write(data)
+		w.Header().Set("Content-Type", respType)
 		// TODO: Post request handler (we might implement it later)
 		//       This way the last function on the chain would be executed at first
 		//       although user approah is more likely to be:
@@ -128,7 +131,7 @@ func reqHandle(w http.ResponseWriter, r *http.Request) {
 }
 
 // forward the request data
-func forward(client *http.Client, url string, requestID string, data []byte) (result []byte, err error) {
+func forward(client *http.Client, url string, requestID string, data []byte) (result []byte, respType string, err error) {
 
 	// Prepare a form that you will submit to that URL.
 	var b bytes.Buffer
@@ -164,6 +167,8 @@ func forward(client *http.Client, url string, requestID string, data []byte) (re
 		return
 	}
 
+	respType = res.Header.Get("Content-Type")
+
 	// Read the result
 	result, err = ioutil.ReadAll(res.Body)
 
@@ -173,7 +178,7 @@ func forward(client *http.Client, url string, requestID string, data []byte) (re
 // forward request to the function
 func forwardToFunction(requestID string) error {
 	client := &http.Client{}
-	_, err := forward(client, forwardAddr, requestID, reqStore[requestID])
+	_, _, err := forward(client, forwardAddr, requestID, reqStore[requestID])
 	if err != nil {
 		return err
 	}
@@ -267,6 +272,10 @@ func initialize() {
 		if os.Getenv("file_form_name") != "" {
 			fileFormName = os.Getenv("file_form_name")
 		}
+	}
+
+	if os.Getenv("content_type") != "" {
+		contentType = os.Getenv("content_type")
 	}
 
 	readTimeout = parseIntOrDurationValue(os.Getenv("read_timeout"), time.Second*5)
