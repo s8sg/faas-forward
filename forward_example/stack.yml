@@ -33,11 +33,4 @@ functions:
     image: s8sg/jsonpage:latest
     environment:
         async: false
-        #forward: htmlhost
         content_type: "text/html"
-
-  # html host
-  #htmlhost:
-  #  lang: dockerfile
-  #  handler: ./htmlhost
-  #  image: s8sg/htmlhost:latest
